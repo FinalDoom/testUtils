@@ -331,6 +331,22 @@ public final class BeanLikeTesterTest {
 		return mapping;
 	}
 
+	private ConstructorSignatureAndPropertiesMapping returnCorrectSignatureAndPropertiesForValidPrivateConstructorBeanLike() {
+		final ConstructorSignatureAndPropertiesMapping mapping = new ConstructorSignatureAndPropertiesMapping();
+		final List<Class<?>> signature1 = Arrays.<Class<?>> asList(String.class, List.class);
+		mapping.put(signature1, Arrays.asList("aString", "aListOfString"));
+
+		final List<Class<?>> privateSignature = Arrays.<Class<?>> asList(String.class, List.class, int.class);
+		mapping.put(privateSignature, Arrays.asList("aString", "aListOfString", "anInt"));
+
+		final List<Class<?>> signature2 = Arrays.<Class<?>> asList(List.class, String.class);
+		mapping.put(signature2, Arrays.asList("aListOfString", "aString"));
+
+		final List<Class<?>> signature3 = Arrays.<Class<?>> asList(String.class, List.class, int.class, Integer.class);
+		mapping.put(signature3, Arrays.asList("aString", "aListOfString", "anInt", "anInteger"));
+		return mapping;
+	}
+
 	private PropertiesAndValues returnCorrectDefaultValueForValidBeanLike() {
 		final PropertiesAndValues defaultValues = new PropertiesAndValues();
 		defaultValues.put("aString", null);
@@ -385,6 +401,20 @@ public final class BeanLikeTesterTest {
 		mapping.put(signature4, Arrays.asList("aListOfString", "anInt", "anInteger"));
 
 		new BeanLikeTester(ValidBeanLike.class, mapping);
+	}
+
+	@Test
+	public void testValidBeanLikeWithPrivateConstructors() {
+		final ConstructorSignatureAndPropertiesMapping mapping = returnCorrectSignatureAndPropertiesForValidPrivateConstructorBeanLike();
+
+		new BeanLikeTester(ValidPrivateConstructorBeanLike.class, mapping, true);
+	}
+
+	@Test(expectedExceptions = BeanLikeTesterException.class, expectedExceptionsMessageRegExp = "The signatures from the constructor's argument must be the same as the bean:\nFrom args:  .+\nFrom object:.+")
+	public void testValidBeanLikeWithPrivateMissingConstructors() {
+		final ConstructorSignatureAndPropertiesMapping mapping = returnCorrectSignatureAndPropertiesForValidPrivateConstructorBeanLike();
+
+		new BeanLikeTester(ValidPrivateConstructorBeanLike.class, mapping);
 	}
 
 	@Test

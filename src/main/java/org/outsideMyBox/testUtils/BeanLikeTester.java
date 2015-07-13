@@ -105,6 +105,27 @@ public final class BeanLikeTester {
 	 *         the constructors doesn't only define properties or setters or accessors are invalid.
 	 */
 	public BeanLikeTester(Class<?> beanLikeClass, ConstructorSignatureAndPropertiesMapping constructorsSignaturesAndProperties) {
+		this(beanLikeClass, constructorsSignaturesAndProperties, false);
+	}
+
+	/**
+	 * Create a BeanLikeTester with a specific beanLike to test.
+	 *
+	 * @param beanLikeClass
+	 *            The 'beanLike' to test.
+	 * @param constructorsSignaturesAndProperties
+	 *            The signature of all the possible constructors (The parameters of the constructors must only set
+	 *            properties).<br/>
+	 *            key: constructor's signature. value: corresponding property name.<br/>
+	 *            For beans the map can be empty or null.
+	 * @param usePrivateConstructors
+	 *            Allows using private or package private constructors, eg. for testing beans normally instantiated by a
+	 *            factory in the same package.
+	 * @throws BeanLikeTesterException
+	 *             if at least one of the signatures doesn't correspond to a constructor or the constructors doesn't
+	 *             only define properties or setters or accessors are invalid.
+	 */
+	public BeanLikeTester(final Class<?> beanLikeClass, final ConstructorSignatureAndPropertiesMapping constructorsSignaturesAndProperties, final boolean usePrivateConstructors) {
 		this.beanLikeClass = beanLikeClass;
 		this.constructorsSignaturesAndProperties = constructorsSignaturesAndProperties == null ? NOARG_SIGNATUREANDPROPS : constructorsSignaturesAndProperties;
 		accessors = getAccessors();
@@ -112,7 +133,7 @@ public final class BeanLikeTester {
 		gettablePropertyNames = accessors.keySet();
 		settablePropertyNames = setters.keySet();
 		mutablePropertyNames = getMutableProperyNames();
-		verifyConstructorSignaturesMatchSignaturesFromArgs();
+		verifyConstructorSignaturesMatchSignaturesFromArgs(usePrivateConstructors);
 		verifySettersAndAccessorsAreValid();
 		verifyAllPropertiesHaveAnAccessor();
 	}
@@ -145,11 +166,17 @@ public final class BeanLikeTester {
 	 * Verify that the beanLike constructors' signatures to test are the same as the ones defined by the beanLike class.
 	  * @throws BeanLikeTesterException if at least one of the signatures doesn't correspond to a constructor.
 	 */
-	private void verifyConstructorSignaturesMatchSignaturesFromArgs() {
+	private void verifyConstructorSignaturesMatchSignaturesFromArgs(boolean usePrivateConstructors) {
 		final Set<List<Class<?>>> signaturesFromArgs = constructorsSignaturesAndProperties.keySet();
 		final Set<List<Class<?>>> signaturesFromConstructor = new HashSet<List<Class<?>>>();
 
-		for (final Constructor<?> constructor : beanLikeClass.getConstructors()) {
+		Constructor<?>[] constructors;
+		if (usePrivateConstructors) {
+			constructors = beanLikeClass.getDeclaredConstructors();
+		} else {
+			constructors = beanLikeClass.getConstructors();
+		}
+		for (final Constructor<?> constructor : constructors) {
 			final List<Class<?>> signature = Arrays.asList(constructor.getParameterTypes());
 			signaturesFromConstructor.add(signature);
 
@@ -423,7 +450,7 @@ public final class BeanLikeTester {
 
 	private Object createObjectWithDefaultValues(PropertiesAndValues propsWithDefaultValue) {
 		// Create the object with default values (any constructor will do).
-		final Constructor<?> constructor = beanLikeClass.getConstructors()[0];
+		final Constructor<?> constructor = beanLikeClass.getDeclaredConstructors()[0];
 		return getNewInstance(constructor, propsWithDefaultValue);
 	}
 
@@ -453,7 +480,7 @@ public final class BeanLikeTester {
 
 		verifyPropertyNamesAreTheSameAs(expectedDefaultValues.keySet());
 		// Test the initial value for all the possible ways to create the object. 
-		for (final Constructor<?> constructor : beanLikeClass.getConstructors()) {
+		for (final Constructor<?> constructor : beanLikeClass.getDeclaredConstructors()) {
 			final Object beanLike = getNewInstance(constructor, expectedDefaultValues);
 
 			for (final Entry<String, Method> entry : accessors.entrySet()) {
@@ -483,7 +510,7 @@ public final class BeanLikeTester {
 		verifyContainsAtLeastAllMutableProperties(otherPropsWithValue.keySet());
 
 		// --- Test the modification from all the constructors.
-		for (final Constructor<?> constructor : beanLikeClass.getConstructors()) {
+		for (final Constructor<?> constructor : beanLikeClass.getDeclaredConstructors()) {
 			final List<Class<?>> constructorSignature = Arrays.asList(constructor.getParameterTypes());
 
 			final Object beanLike = getNewInstance(constructor, otherPropsWithValue);
