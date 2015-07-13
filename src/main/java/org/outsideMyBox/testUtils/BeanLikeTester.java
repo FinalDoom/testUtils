@@ -87,6 +87,7 @@ public final class BeanLikeTester {
 
 	private final Class<?>                                 beanLikeClass;
 	private final ConstructorSignatureAndPropertiesMapping constructorsSignaturesAndProperties;
+	private final boolean                                  usePrivateConstructors;
 	private final Set<String>                              gettablePropertyNames;
 	private final Set<String>                              settablePropertyNames;
 	private final Set<String>                              mutablePropertyNames;
@@ -128,12 +129,13 @@ public final class BeanLikeTester {
 	public BeanLikeTester(final Class<?> beanLikeClass, final ConstructorSignatureAndPropertiesMapping constructorsSignaturesAndProperties, final boolean usePrivateConstructors) {
 		this.beanLikeClass = beanLikeClass;
 		this.constructorsSignaturesAndProperties = constructorsSignaturesAndProperties == null ? NOARG_SIGNATUREANDPROPS : constructorsSignaturesAndProperties;
+		this.usePrivateConstructors = usePrivateConstructors;
 		accessors = getAccessors();
 		setters = getSetters();
 		gettablePropertyNames = accessors.keySet();
 		settablePropertyNames = setters.keySet();
 		mutablePropertyNames = getMutableProperyNames();
-		verifyConstructorSignaturesMatchSignaturesFromArgs(usePrivateConstructors);
+		verifyConstructorSignaturesMatchSignaturesFromArgs();
 		verifySettersAndAccessorsAreValid();
 		verifyAllPropertiesHaveAnAccessor();
 	}
@@ -166,17 +168,11 @@ public final class BeanLikeTester {
 	 * Verify that the beanLike constructors' signatures to test are the same as the ones defined by the beanLike class.
 	  * @throws BeanLikeTesterException if at least one of the signatures doesn't correspond to a constructor.
 	 */
-	private void verifyConstructorSignaturesMatchSignaturesFromArgs(boolean usePrivateConstructors) {
+	private void verifyConstructorSignaturesMatchSignaturesFromArgs() {
 		final Set<List<Class<?>>> signaturesFromArgs = constructorsSignaturesAndProperties.keySet();
 		final Set<List<Class<?>>> signaturesFromConstructor = new HashSet<List<Class<?>>>();
 
-		Constructor<?>[] constructors;
-		if (usePrivateConstructors) {
-			constructors = beanLikeClass.getDeclaredConstructors();
-		} else {
-			constructors = beanLikeClass.getConstructors();
-		}
-		for (final Constructor<?> constructor : constructors) {
+		for (final Constructor<?> constructor : getBeanConstructors()) {
 			final List<Class<?>> signature = Arrays.asList(constructor.getParameterTypes());
 			signaturesFromConstructor.add(signature);
 
@@ -184,6 +180,18 @@ public final class BeanLikeTester {
 		if (!signaturesFromArgs.equals(signaturesFromConstructor)) {
 			throw new BeanLikeTesterException("The signatures from the constructor's argument must be the same as the bean:\nFrom args:  " + signaturesFromArgs
 			                                  + "\nFrom object:" + signaturesFromConstructor);
+		}
+	}
+	
+	/**
+	 * Gets the list of constructors for the tested bean. Also gets private constructrors if so configured.
+	 * @return The list of constructors for the bean.
+	 */
+	private Constructor<?>[] getBeanConstructors() {
+		if (usePrivateConstructors) {
+			return beanLikeClass.getDeclaredConstructors();
+		} else {
+			return beanLikeClass.getConstructors();
 		}
 	}
 
@@ -240,10 +248,10 @@ public final class BeanLikeTester {
 	 * @return New instance.
 	 * @throws BeanLikeTesterException if the instance couldn't be created.
 	 */
-	private static Object createNewInstance(String fullyQualifiedClassName, Class<?>[] constructorSignature, Object... constructorParams) {
+	private static Object createNewInstance(String fullyQualifiedClassName, boolean usePrivateConstructors, Class<?>[] constructorSignature, Object... constructorParams) {
 		try {
 			final Class<?> classToInstantiate = Class.forName(fullyQualifiedClassName);
-			final Constructor<? extends Object> classConstructor = classToInstantiate.getConstructor(constructorSignature);
+			final Constructor<? extends Object> classConstructor = getClassConstructor(classToInstantiate, constructorSignature, usePrivateConstructors);
 			return classConstructor.newInstance(constructorParams);
 		} catch (final Exception e) {
 			final String msg = MessageFormat.format("exception msg: {0} \n\tfullyQualifiedClassName: {1} \n\tconstructorSignature: {2} \n\tconstructorParams: {3}",
@@ -252,6 +260,24 @@ public final class BeanLikeTester {
 			                                        Arrays.asList(constructorSignature),
 			                                        Arrays.asList(constructorParams));
 			throw new BeanLikeTesterException(msg, e);
+		}
+	}
+	
+	/**
+	 * Get a constructor from a class with the passed signature. Overrides accessibility if using private constructors is enabled.
+	 * @param classToInstantiate The class to get a constructor for.
+	 * @param constructorSignature Signature of the constructor to use.
+	 * @return Matching constructor.
+	 * @throws SecurityException If there is an error making a constructor visible.
+	 * @throws NoSuchMethodException If the constructor couldn't be found.
+	 */
+	private static Constructor<? extends Object> getClassConstructor(Class<?> classToInstantiate, Class<?>[] constructorSignature, boolean usePrivateConstructors) throws NoSuchMethodException, SecurityException {
+		if (usePrivateConstructors) {
+			Constructor<? extends Object> constructor = classToInstantiate.getDeclaredConstructor(constructorSignature);
+			constructor.setAccessible(true);
+			return constructor;
+		} else {
+			return classToInstantiate.getConstructor(constructorSignature);
 		}
 	}
 
@@ -349,7 +375,7 @@ public final class BeanLikeTester {
 				propertyValues.add(propertiesAndValues.get(propertyName));
 			}
 		}
-		return createNewInstance(beanLikeClass.getName(), constructorSignature, propertyValues.toArray());
+		return createNewInstance(beanLikeClass.getName(), usePrivateConstructors, constructorSignature, propertyValues.toArray());
 	}
 
 	/**
@@ -442,7 +468,7 @@ public final class BeanLikeTester {
 				for (final String propertyName : constructorPropertyNames) {
 					constructorValues.add(propsWithValue.get(propertyName));
 				}
-				return createNewInstance(beanLikeClass.getName(), constructorSignature, constructorValues.toArray());
+				return createNewInstance(beanLikeClass.getName(), usePrivateConstructors, constructorSignature, constructorValues.toArray());
 			}
 		}
 		throw new RuntimeException("The property '" + property + "' must be settable by either a setter or a constructor!");
